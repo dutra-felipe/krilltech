@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krill Radar</title>
+<style>
+  /* Fontes self-hosted em assets/fonts/ — zero chamada de rede no dia da
+     demo, mesma garantia de offline que o painel sempre teve. IBM Plex
+     porque a IBM é a apoiadora tecnológica do desafio (watsonx) — referência
+     discreta, não decoração. Sans pro texto corrido, Mono só pra número e
+     código exato (score, CNPJ, data) via a classe .num que já existia —
+     separação clássica de dashboard entre prosa e dado. */
+  @font-face {
+    font-family: 'IBM Plex Sans';
+    src: url('/assets/fonts/IBMPlexSans-Regular.woff2') format('woff2');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'IBM Plex Sans';
+    src: url('/assets/fonts/IBMPlexSans-Medium.woff2') format('woff2');
+    font-weight: 500; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'IBM Plex Sans';
+    src: url('/assets/fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
+    font-weight: 600; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'IBM Plex Mono';
+    src: url('/assets/fonts/IBMPlexMono-Regular.woff2') format('woff2');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'IBM Plex Mono';
+    src: url('/assets/fonts/IBMPlexMono-Medium.woff2') format('woff2');
+    font-weight: 500; font-style: normal; font-display: swap;
+  }
+
+  :root {
+    /* Paleta Krilltech (krilltech.com.br), adaptada do painel escuro original
+       para o claro da marca. Rating A reaproveita o verde bio da marca —
+       mesmo sentido semântico (baixo risco = crescimento saudável) — em vez
+       de duplicar verde com dois tons diferentes na tela.
+       Ratings A/B/C foram escurecidos em relação ao valor "cru" do site: no
+       fundo branco, #27AE60/#D4A63C/#C4712F como texto ficam abaixo de 3:1 de
+       contraste (ilegível). Os tons abaixo mantêm a mesma família de cor com
+       contraste ≥4.5:1 (AA) — ver IDENTIDADE_VISUAL.md para a tabela. */
+    --tinta: #FFFFFF;
+    --superficie: #F8F9FA;
+    --superficie-alta: #EEF1F5;
+    --borda: #DDE2E8;
+    --texto: #1E293B;
+    --texto-fraco: #6C757D;
+    --texto-tenue: #838E9A;
+
+    --marca: #3B6ACC;
+    --marca-hover: #2F57A8;
+
+    /* Reservadas ao rating. Não usar como decoração fora disso. */
+    --rating-a: #1B7A43;
+    --rating-b: #8A6D1F;
+    --rating-c: #A85D1F;
+    --rating-d: #B03A2E;
+
+    --grotesk: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system,
+               "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, "SF Mono", "Cascadia Code",
+            Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { background: var(--tinta); }
+
+  body {
+    margin: 0;
+    padding: 0 0 88px;
+    font-family: var(--grotesk);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--texto);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Números não dançam. Painel de risco com número instável perde
+     credibilidade na frente de quem decide. */
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+  a { color: inherit; }
+
+  .envelope { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- topo ---------- */
+
+  header.topo {
+    border-bottom: 1px solid var(--borda);
+    padding: 26px 0 22px;
+    display: flex;
+    align-items: baseline;
+    gap: 22px;
+    flex-wrap: wrap;
+  }
+  .marca { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; }
+  .marca span { color: var(--texto-tenue); font-weight: 400; }
+  .subtitulo { color: var(--texto-fraco); font-size: 13.5px; margin-left: auto; }
+  .btn-nav {
+    background: var(--marca); border: 1px solid var(--marca); color: #FFFFFF;
+    padding: 8px 14px; border-radius: 4px; font: inherit; cursor: pointer; font-weight: 550;
+    transition: background-color .15s ease, border-color .15s ease, transform .1s ease;
+  }
+  .btn-nav:hover { background: var(--marca-hover); border-color: var(--marca-hover); }
+  .btn-nav:active { transform: scale(.97); }
+
+  /* ---------- busca ao vivo ---------- */
+
+  .busca {
+    display: flex; gap: 10px; align-items: center;
+    padding: 20px 0 4px; flex-wrap: wrap;
+  }
+  .busca label { color: var(--texto-fraco); font-size: 13.5px; }
+  .busca input {
+    background: var(--superficie); border: 1px solid var(--borda);
+    color: var(--texto); padding: 9px 12px; border-radius: 3px;
+    font: inherit; width: 220px;
+    font-variant-numeric: tabular-nums;
+  }
+  .busca input:focus-visible { outline: 2px solid var(--texto-fraco); outline-offset: 1px; }
+  .busca button {
+    background: var(--marca); border: 1px solid var(--marca);
+    color: #FFFFFF; padding: 9px 16px; border-radius: 4px;
+    font: inherit; cursor: pointer; font-weight: 550;
+    transition: background-color .15s ease, border-color .15s ease, transform .1s ease;
+  }
+  .busca button:hover { background: var(--marca-hover); border-color: var(--marca-hover); }
+  .busca button:active { transform: scale(.97); }
+  .busca button:disabled { opacity: .5; cursor: default; }
+  .busca .dica { color: var(--texto-tenue); font-size: 12.5px; }
+
+  /* ---------- fila ---------- */
+
+  .secao-titulo {
+    margin: 34px 0 6px; font-size: 15px; font-weight: 600;
+  }
+  .secao-nota { color: var(--texto-fraco); font-size: 13px; margin: 0 0 16px; max-width: 68ch; }
+
+  table.fila { width: 100%; border-collapse: collapse; }
+  table.fila th {
+    text-align: left; font-size: 12px; font-weight: 600; color: var(--texto-tenue);
+    padding: 0 12px 9px 0; border-bottom: 1px solid var(--borda); white-space: nowrap;
+  }
+  table.fila th.n, table.fila td.n { text-align: right; padding-right: 18px; }
+  table.fila th.ordenavel {
+    cursor: pointer; user-select: none; transition: color .15s ease;
+  }
+  table.fila th.ordenavel:hover { color: var(--texto); }
+  table.fila th.ordenavel::after {
+    content: ''; display: inline-block; width: 0; margin-left: 4px;
+  }
+  table.fila th.ordenavel.ativo-asc::after { content: '▲'; font-size: 9px; }
+  table.fila th.ordenavel.ativo-desc::after { content: '▼'; font-size: 9px; }
+  table.fila td {
+    padding: 13px 12px 13px 0; border-bottom: 1px solid var(--borda); vertical-align: baseline;
+  }
+  table.fila tbody tr { cursor: pointer; }
+  table.fila tbody tr td { transition: background-color .15s ease; }
+  table.fila tbody tr:hover td { background: var(--superficie); }
+  table.fila tbody tr:focus-visible { outline: 2px solid var(--texto-fraco); }
+  .cliente-nome { font-weight: 550; }
+  .cliente-meta { color: var(--texto-tenue); font-size: 12.5px; }
+
+  .score-cel { font-size: 17px; font-weight: 600; }
+
+  /* Rating: único lugar onde cor carrega significado. */
+  .rating {
+    display: inline-block; min-width: 20px; text-align: center;
+    font-weight: 700; font-size: 13px;
+    border-bottom: 2px solid currentColor; padding-bottom: 1px;
+  }
+  .rating.r-A { color: var(--rating-a); }
+  .rating.r-B { color: var(--rating-b); }
+  .rating.r-C { color: var(--rating-c); }
+  .rating.r-D { color: var(--rating-d); }
+
+  .delta { font-weight: 600; }
+  .delta.caindo::before { content: "▾ "; }
+  .delta.subindo::before { content: "▴ "; }
+  .delta.estavel { color: var(--texto-tenue); }
+
+  .conf { font-size: 12.5px; color: var(--texto-fraco); }
+
+  /* ---------- status de fonte: distinção ESTRUTURAL, não por cor ----------
+     A cor está reservada ao rating, então ao vivo / simulado / indisponível
+     se diferenciam por régua e glifo. Legível sem legenda e sem depender de
+     percepção de cor. */
+  .selo {
+    font-size: 11.5px; color: var(--texto-fraco);
+    padding-left: 9px; white-space: nowrap;
+  }
+  .selo.ao_vivo      { border-left: 3px solid var(--texto-fraco); }
+  .selo.simulado     { border-left: 3px dashed var(--texto-tenue); color: var(--texto-tenue); }
+  .selo.indisponivel { border-left: 3px dotted var(--texto-tenue); color: var(--texto-tenue); }
+  .selo.ao_vivo::after      { content: " ao vivo"; }
+  .selo.simulado::after     { content: " simulado"; }
+  .selo.indisponivel::after { content: " indisponível"; }
+
+  /* ---------- dossiê ---------- */
+
+  .dossie { display: none; }
+  .dossie.aberto { display: block; }
+  .fila-wrap.oculto { display: none; }
+
+  .voltar {
+    background: none; border: none; color: var(--texto-fraco);
+    font: inherit; padding: 22px 0 0; cursor: pointer;
+  }
+  .voltar:hover { color: var(--texto); }
+
+  .dossie-nav { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .dossie-nav .voltar { padding-top: 22px; }
+  .dossie-nav .btn-nav { margin-top: 14px; }
+
+  .cabeca-dossie {
+    display: flex; gap: 40px; align-items: flex-end;
+    padding: 14px 0 26px; border-bottom: 1px solid var(--borda); flex-wrap: wrap;
+  }
+  .cabeca-dossie h1 { margin: 0 0 4px; font-size: 22px; font-weight: 650; letter-spacing: -0.015em; }
+  .cabeca-dossie .ident { color: var(--texto-fraco); font-size: 13.5px; }
+
+  /* O score e sua trajetória são o elemento memorável. Todo o resto fica quieto. */
+  .score-grande {
+    margin-left: auto; text-align: right; line-height: 1;
+  }
+  .score-grande .valor { font-size: 62px; font-weight: 300; letter-spacing: -0.035em; }
+  .score-grande .faixa { font-size: 13px; color: var(--texto-fraco); margin-top: 8px; }
+
+  .grafico-caixa { padding: 30px 0 8px; }
+  .grafico-caixa svg { width: 100%; height: auto; display: block; }
+
+  .legenda-grafico {
+    color: var(--texto-tenue); font-size: 12.5px; padding-top: 4px;
+  }
+
+  .colunas { display: grid; grid-template-columns: 1.55fr 1fr; gap: 46px; padding-top: 34px; }
+  @media (max-width: 900px) { .colunas { grid-template-columns: 1fr; gap: 30px; } }
+
+  h2.bloco { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  p.bloco-nota { color: var(--texto-fraco); font-size: 13px; margin: 0 0 18px; }
+
+  /* sinais */
+  .sinal { padding: 15px 0; border-bottom: 1px solid var(--borda); }
+  .sinal:first-of-type { border-top: 1px solid var(--borda); }
+  .sinal-topo { display: flex; gap: 14px; align-items: baseline; }
+  .sinal-desc { flex: 1; min-width: 0; }
+  .sinal-peso { font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .sinal-peso.zerado { color: var(--texto-tenue); font-weight: 400; }
+  .sinal-rodape {
+    display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap;
+    margin-top: 7px; font-size: 12.5px; color: var(--texto-tenue);
+  }
+  .camada { font-size: 12.5px; }
+  .camada.det { color: var(--texto-fraco); }
+  .neutralizado {
+    margin-top: 8px; font-size: 12.5px; color: var(--texto-fraco);
+    border-left: 2px solid var(--borda); padding-left: 10px;
+  }
+  .evidencia {
+    margin-top: 10px; padding: 11px 13px; background: var(--superficie);
+    border-left: 2px solid var(--borda);
+    font-size: 12.5px; line-height: 1.6; color: var(--texto-fraco);
+    max-height: 90px; overflow: hidden;
+    transition: max-height .25s ease;
+  }
+  .evidencia.expandida { max-height: 600px; overflow: auto; }
+  .evidencia strong { color: var(--texto); font-weight: 600; display: block; margin-bottom: 4px; font-size: 11.5px; }
+  .evidencia-toggle {
+    margin-top: 6px; background: none; border: none; color: var(--marca);
+    font: inherit; font-size: 12px; cursor: pointer; padding: 0;
+  }
+  .evidencia-toggle:hover { text-decoration: underline; }
+
+  /* explicação e decisão */
+  .explicacao {
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-radius: 3px; padding: 18px 20px; margin-bottom: 26px;
+  }
+  .explicacao p { margin: 0; max-width: 72ch; }
+  .explicacao .origem { margin-top: 12px; font-size: 12px; color: var(--texto-tenue); }
+
+  .decisao {
+    border: 1px solid var(--borda); border-left-width: 4px;
+    border-radius: 3px; padding: 17px 20px; margin-bottom: 26px;
+  }
+  .decisao.r-A { border-left-color: var(--rating-a); }
+  .decisao.r-B { border-left-color: var(--rating-b); }
+  .decisao.r-C { border-left-color: var(--rating-c); }
+  .decisao.r-D { border-left-color: var(--rating-d); }
+  .decisao h3 { margin: 0 0 6px; font-size: 12px; color: var(--texto-tenue); font-weight: 600; }
+  .decisao p { margin: 0; font-size: 15.5px; }
+
+  /* fontes */
+  .fonte-item { padding: 13px 0; border-bottom: 1px solid var(--borda); }
+  .fonte-item:first-of-type { border-top: 1px solid var(--borda); }
+  .fonte-linha { display: flex; gap: 12px; align-items: baseline; }
+  .fonte-nome { flex: 1; font-size: 13.5px; }
+  .fonte-meta { font-size: 12px; color: var(--texto-tenue); margin-top: 5px; }
+  .fora-escopo { margin-top: 26px; }
+  .fora-escopo .item { padding: 10px 0; border-bottom: 1px solid var(--borda); font-size: 13px; }
+  .fora-escopo .motivo { color: var(--texto-tenue); font-size: 12.5px; }
+
+  .carregando { color: var(--texto-fraco); padding: 40px 0; font-size: 14px; }
+  .erro {
+    border: 1px solid var(--rating-c); border-radius: 3px;
+    padding: 14px 16px; margin: 20px 0; font-size: 14px;
+  }
+  .erro strong { display: block; margin-bottom: 4px; }
+
+  /* rodapé: revisão humana obrigatória, fixo em toda tela de decisão */
+  footer.travas {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(255,255,255,.94); border-top: 1px solid var(--borda);
+    padding: 12px 0; font-size: 12.5px; color: var(--texto-fraco);
+    backdrop-filter: blur(6px);
+  }
+  footer.travas .envelope { display: flex; gap: 22px; flex-wrap: wrap; }
+  footer.travas .modo { margin-left: auto; color: var(--texto-tenue); }
+
+  /* ---------- PD estimada / ações recomendadas ---------- */
+  .selo.estimado { border-left: 3px dotted var(--texto-fraco); color: var(--texto-fraco); }
+  .selo.estimado::after { content: " estimativa — não calibrada"; }
+
+  .pd-caixa {
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-radius: 3px; padding: 16px 18px; margin-bottom: 26px;
+  }
+  .pd-caixa h2.bloco { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .pd-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .pd-item { text-align: center; padding: 10px 4px; border: 1px solid var(--borda); border-radius: 3px; }
+  .pd-valor { font-size: 20px; font-weight: 600; }
+  .pd-horizonte { font-size: 11.5px; color: var(--texto-tenue); margin-top: 3px; }
+
+  .acoes-recomendadas { margin-bottom: 26px; }
+  .acao-item { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--borda); }
+  .acao-item:first-of-type { border-top: 1px solid var(--borda); }
+  .acao-num {
+    flex: none; width: 20px; height: 20px; border-radius: 50%;
+    border: 1px solid var(--borda); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--texto-fraco);
+  }
+  .acao-texto { font-size: 14px; }
+  .acao-motivo { font-size: 12.5px; color: var(--texto-tenue); margin-top: 3px; }
+
+  /* ---------- simulador de estresse ---------- */
+  .simulador-form {
+    display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap;
+    padding: 6px 0 24px; border-bottom: 1px solid var(--borda); margin-bottom: 22px;
+  }
+  .simulador-form label {
+    display: flex; flex-direction: column; gap: 6px;
+    font-size: 12.5px; color: var(--texto-fraco);
+  }
+  .simulador-form select, .simulador-form input[type="text"] {
+    background: var(--superficie); border: 1px solid var(--borda); color: var(--texto);
+    padding: 9px 12px; border-radius: 3px; font: inherit; min-width: 260px;
+  }
+  .simulador-form input[type="range"] { width: 200px; accent-color: var(--texto-fraco); }
+  .simulador-form input#simUf { min-width: 80px; text-transform: uppercase; }
+  .simulador-form button {
+    background: var(--marca); border: 1px solid var(--marca); color: #FFFFFF;
+    padding: 10px 18px; border-radius: 4px; font: inherit; cursor: pointer; height: 38px; font-weight: 550;
+    transition: background-color .15s ease, border-color .15s ease, transform .1s ease;
+  }
+  .simulador-form button:hover { background: var(--marca-hover); border-color: var(--marca-hover); }
+  .simulador-form button:active { transform: scale(.97); }
+
+  .sim-resumo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+  .sim-card { border: 1px solid var(--borda); border-radius: 3px; padding: 16px 18px; }
+  .sim-valor { font-size: 24px; font-weight: 600; }
+  .sim-rotulo { font-size: 12.5px; color: var(--texto-fraco); margin-top: 4px; }
+  .sim-tabela { margin-top: 8px; }
+  .sim-tabela tr.sim-migrou td { background: #EAF0FC; }
+  .sim-seta { color: var(--texto-tenue); padding: 0 4px; }
+
+  @media (max-width: 900px) {
+    .pd-grid { grid-template-columns: 1fr 1fr 1fr; }
+    .sim-resumo { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- relatório impresso ---------- */
+  /* Escondidos na tela; só aparecem sob @media print, formatando o dossiê
+     como um documento — cabeçalho com identificação, rodapé com a mesma
+     trava de revisão humana que já é fixa na tela. */
+  .relatorio-cabecalho, .relatorio-rodape { display: none; }
+
+  @media print {
+    header.topo, footer.travas, #filaWrap, #simulador, .dossie-nav {
+      display: none !important;
+    }
+    body { padding-bottom: 0; }
+    .envelope { max-width: 100%; }
+    .colunas { grid-template-columns: 1fr; gap: 20px; }
+    .sinal, .acao-item, .fonte-item, .pd-caixa { break-inside: avoid; }
+    .grafico-caixa { padding-top: 10px; }
+
+    .relatorio-cabecalho {
+      display: block; margin-bottom: 20px; padding-bottom: 14px;
+      border-bottom: 2px solid var(--texto);
+    }
+    .relatorio-cabecalho .marca-relatorio { font-size: 17px; font-weight: 700; color: var(--marca); }
+    .relatorio-cabecalho .meta-relatorio { font-size: 11px; color: var(--texto-fraco); margin-top: 4px; }
+
+    .relatorio-rodape {
+      display: block; margin-top: 26px; padding-top: 12px;
+      border-top: 1px solid var(--borda); font-size: 10.5px; color: var(--texto-fraco);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="envelope">
+  <header class="topo">
+    <div class="marca">Krill Radar <span>/ antecipação de deterioração de crédito</span></div>
+    <div class="subtitulo" id="subtitulo">carregando carteira…</div>
+    <button class="btn-nav" id="simuladorBtn">Simulador de estresse</button>
+  </header>
+</div>
+
+<!-- ---------- fila do analista ---------- -->
+<div class="envelope fila-wrap" id="filaWrap">
+
+  <div class="busca">
+    <label for="cnpjInput">Consultar CNPJ na Receita Federal</label>
+    <input id="cnpjInput" class="num" inputmode="numeric" placeholder="19131243000197" maxlength="18">
+    <button id="cnpjBtn">Consultar</button>
+    <span class="dica">roda a cadeia completa: Receita → IBGE → diários oficiais → score</span>
+  </div>
+  <div id="buscaErro"></div>
+
+  <h2 class="secao-titulo">Fila de atenção</h2>
+  <p class="secao-nota">
+    Ordenada por velocidade de deterioração, não por risco absoluto. Um cliente B que
+    caiu 170 pontos em 30 dias precisa de ação antes de um D que está parado há meses —
+    no primeiro a janela de cobrança ainda está aberta.
+  </p>
+
+  <table class="fila">
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Cultura</th>
+        <th class="n ordenavel" data-campo="score">Score</th>
+        <th class="ordenavel" data-campo="rating">Rating</th>
+        <th class="n ordenavel" data-campo="delta30">30 dias</th>
+        <th class="ordenavel" data-campo="confianca">Confiança</th>
+        <th class="n ordenavel" data-campo="sinais">Sinais</th>
+      </tr>
+    </thead>
+    <tbody id="filaCorpo">
+      <tr><td colspan="7" class="carregando">Consultando…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ---------- dossiê ---------- -->
+<div class="envelope dossie" id="dossie">
+  <div class="dossie-nav">
+    <button class="voltar" id="voltarBtn">← Voltar para a fila</button>
+    <button class="btn-nav" id="relatorioBtn">Gerar relatório (PDF)</button>
+  </div>
+  <div id="dossieCorpo"><div class="carregando">Orquestrando fontes…</div></div>
+</div>
+
+<!-- ---------- simulador de estresse de portfólio ---------- -->
+<div class="envelope dossie" id="simulador">
+  <button class="voltar" id="voltarSimuladorBtn">← Voltar para a fila</button>
+
+  <h2 class="secao-titulo">Simulador de estresse de carteira</h2>
+  <p class="secao-nota">
+    Choque hipotético aplicado sobre a carteira inteira — não é previsão, é dimensionamento de
+    exposição sob cenário adverso. Cálculo local sobre o mesmo score que a fila mostra e sobre
+    limite de crédito mockado (dado interno da Krill Tech, simulado no protótipo). Não consulta
+    nenhuma fonte externa nem API.
+  </p>
+
+  <div class="simulador-form">
+    <label for="simTipo">Tipo de choque
+      <select id="simTipo">
+        <option value="commodity">Queda no preço de commodity (soja/milho/algodão/trigo)</option>
+        <option value="clima">Quebra de safra regional (seca / El Niño / La Niña)</option>
+      </select>
+    </label>
+    <label for="simIntensidade">Intensidade — <span id="simIntensidadeValor" class="num">50%</span>
+      <input type="range" id="simIntensidade" min="0" max="100" value="50" step="5">
+    </label>
+    <label for="simUf" id="simUfWrap" style="display:none">UF (vazio = todas as regiões)
+      <input type="text" id="simUf" maxlength="2" placeholder="MT">
+    </label>
+    <button id="simRodarBtn">Rodar simulação</button>
+  </div>
+
+  <div id="simResultado"></div>
+</div>
+
+<footer class="travas">
+  <div class="envelope">
+    <span>Revisão humana obrigatória — o sistema recomenda, não decide.</span>
+    <span>Nível de confiança do sinal, não probabilidade de inadimplência calibrada.</span>
+    <span class="modo" id="modoRodape"></span>
+  </div>
+</footer>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+
+const rot = {
+  alto: 'alta', medio: 'média', baixo: 'baixa',
+  caindo: 'caindo', subindo: 'subindo', estavel: 'estável',
+};
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function cnpjFmt(v) {
+  const d = String(v || '').replace(/\D/g, '').padStart(14, '0');
+  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
+}
+function dataFmt(iso) {
+  if (!iso) return 'sem data';
+  const d = new Date(iso.length <= 10 ? iso + 'T12:00:00' : iso);
+  if (Number.isNaN(+d)) return esc(iso);
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function deltaTxt(t) {
+  if (!t?.dados) return '—';
+  const s = t.delta30 > 0 ? '+' : '';
+  return `${s}${t.delta30}`;
+}
+
+// ---------- animações de entrada (só ao abrir o dossiê) ----------
+function animarScore() {
+  const el = $('#scoreValor');
+  if (!el) return;
+  const alvo = Number(el.dataset.final || 0);
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = alvo;
+    return;
+  }
+  const duracao = 700;
+  const inicio = performance.now();
+  function passo(agora) {
+    const t = Math.min(1, (agora - inicio) / duracao);
+    const facilitada = 1 - Math.pow(1 - t, 3); // ease-out cúbica
+    el.textContent = Math.round(alvo * facilitada);
+    if (t < 1) requestAnimationFrame(passo);
+    else el.textContent = alvo;
+  }
+  requestAnimationFrame(passo);
+}
+
+function animarGrafico() {
+  const path = document.querySelector('#linhaScore');
+  if (!path || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const comprimento = path.getTotalLength();
+  path.style.transition = 'none';
+  path.style.strokeDasharray = String(comprimento);
+  path.style.strokeDashoffset = String(comprimento);
+  path.getBoundingClientRect(); // força reflow antes de religar a transição
+  path.style.transition = 'stroke-dashoffset 900ms ease';
+  path.style.strokeDashoffset = '0';
+}
+
+// Expandir/recolher trecho de evidência — delegado porque o conteúdo do
+// dossiê é recriado a cada troca de cliente.
+$('#dossieCorpo').addEventListener('click', (e) => {
+  const btn = e.target.closest('.evidencia-toggle');
+  if (!btn) return;
+  const caixa = btn.previousElementSibling;
+  if (!caixa?.classList.contains('evidencia')) return;
+  const expandida = caixa.classList.toggle('expandida');
+  btn.textContent = expandida ? 'mostrar menos' : 'mostrar mais';
+});
+
+// ---------- fila ----------
+let filaDados = [];
+let filaOrdenacao = { campo: 'prioridade', direcao: 'desc' };
+
+const VALOR_ORDENACAO = {
+  prioridade: (l) => l.prioridade,
+  score: (l) => l.score,
+  rating: (l) => ({ A: 0, B: 1, C: 2, D: 3 }[l.rating] ?? 0),
+  delta30: (l) => l.tendencia?.delta30 ?? 0,
+  confianca: (l) => ({ baixo: 0, medio: 1, alto: 2 }[l.confianca] ?? 0),
+  sinais: (l) => l.sinais,
+};
+
+function renderFila() {
+  const corpo = $('#filaCorpo');
+  const { campo, direcao } = filaOrdenacao;
+  const obterValor = VALOR_ORDENACAO[campo];
+  const linhas = [...filaDados];
+  if (obterValor) {
+    linhas.sort((a, b) => {
+      const diff = obterValor(a) - obterValor(b);
+      return direcao === 'asc' ? diff : -diff;
+    });
+  }
+
+  corpo.innerHTML = linhas.map((l) => `
+    <tr tabindex="0" data-id="${esc(l.id)}">
+      <td>
+        <div class="cliente-nome">${esc(l.nome)}</div>
+        <div class="cliente-meta num">${cnpjFmt(l.cnpj)} · ${esc(l.municipio)}/${esc(l.uf)}</div>
+      </td>
+      <td class="cliente-meta">${esc(l.cultura)}</td>
+      <td class="n score-cel num">${l.score}</td>
+      <td><span class="rating r-${l.rating}">${l.rating}</span></td>
+      <td class="n num delta ${l.tendencia.direcao}">${deltaTxt(l.tendencia)}</td>
+      <td class="conf">${rot[l.confianca] || l.confianca}</td>
+      <td class="n num cliente-meta">${l.sinais}</td>
+    </tr>`).join('');
+
+  corpo.querySelectorAll('tr[data-id]').forEach((tr) => {
+    const abrir = () => abrirDossie({ id: tr.dataset.id });
+    tr.addEventListener('click', abrir);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } });
+  });
+
+  document.querySelectorAll('th.ordenavel').forEach((th) => {
+    th.classList.remove('ativo-asc', 'ativo-desc');
+    if (th.dataset.campo === campo) th.classList.add(direcao === 'asc' ? 'ativo-asc' : 'ativo-desc');
+  });
+}
+
+document.querySelectorAll('th.ordenavel').forEach((th) => {
+  th.addEventListener('click', () => {
+    const campo = th.dataset.campo;
+    filaOrdenacao = filaOrdenacao.campo === campo
+      ? { campo, direcao: filaOrdenacao.direcao === 'asc' ? 'desc' : 'asc' }
+      : { campo, direcao: 'desc' };
+    renderFila();
+  });
+});
+
+async function carregarFila() {
+  const corpo = $('#filaCorpo');
+  try {
+    const r = await fetch('/api/carteira');
+    const { linhas } = await r.json();
+    filaDados = linhas;
+    $('#subtitulo').textContent =
+      `${linhas.length} clientes monitorados · ${linhas.filter(l => l.tendencia.direcao === 'caindo').length} em deterioração`;
+    renderFila();
+  } catch (e) {
+    corpo.innerHTML = `<tr><td colspan="7"><div class="erro">
+      <strong>A carteira não carregou.</strong>
+      O servidor não respondeu em /api/carteira. Verifique se <code>node server.mjs</code> está rodando e recarregue.
+    </div></td></tr>`;
+  }
+}
+
+// ---------- gráfico: SVG desenhado à mão, sem biblioteca ----------
+function grafico(historico, sinais) {
+  if (!historico?.length) return '<p class="legenda-grafico">Sem histórico para plotar.</p>';
+
+  const L = 44, R = 16, T = 18, B = 30;   // margens
+  const W = 900, H = 250;
+  const pw = W - L - R, ph = H - T - B;
+
+  const x = (i) => L + (i / Math.max(1, historico.length - 1)) * pw;
+  const y = (s) => T + (1 - s / 1000) * ph;
+
+  const linha = historico.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.score).toFixed(1)}`).join(' ');
+  const area = `${linha} L${x(historico.length - 1).toFixed(1)},${(T + ph).toFixed(1)} L${L},${(T + ph).toFixed(1)} Z`;
+
+  // Réguas nos limites de faixa: isso é informação, não decoração.
+  const limites = [
+    { s: 801, r: 'A' }, { s: 601, r: 'B' }, { s: 401, r: 'C' },
+  ].map((f) => `
+    <line x1="${L}" y1="${y(f.s).toFixed(1)}" x2="${W - R}" y2="${y(f.s).toFixed(1)}"
+          stroke="var(--borda)" stroke-width="1" stroke-dasharray="2 4"/>
+    <text x="${L - 9}" y="${(y(f.s) + 3.5).toFixed(1)}" text-anchor="end"
+          font-size="10" fill="var(--texto-tenue)" font-variant-numeric="tabular-nums">${f.s}</text>`).join('');
+
+  // Anotações: só sinais que caem dentro da janela plotada.
+  const datas = historico.map((p) => p.data);
+  const marcas = [];
+  (sinais || [])
+    .filter((s) => s.data)
+    .sort((a, b) => new Date(a.data) - new Date(b.data))
+    .forEach((s) => {
+      const alvo = String(s.data).slice(0, 10);
+      let i = datas.findIndex((d) => d >= alvo);
+      if (i < 0) return;                  // posterior à janela
+      if (alvo < datas[0]) return;        // anterior à janela
+      marcas.push({ i, sinal: s, n: marcas.length + 1 });
+    });
+
+  const anotacoes = marcas.map((m) => {
+    const px = x(m.i), py = y(historico[m.i].score);
+    const alto = m.n % 2 === 0;
+    const ty = alto ? T + 14 : T + 34;
+    return `
+      <line x1="${px.toFixed(1)}" y1="${(ty + 6).toFixed(1)}" x2="${px.toFixed(1)}" y2="${(py - 6).toFixed(1)}"
+            stroke="var(--borda)" stroke-width="1"/>
+      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.5" fill="var(--tinta)" stroke="var(--marca)" stroke-width="1.5"/>
+      <circle cx="${px.toFixed(1)}" cy="${ty.toFixed(1)}" r="8" fill="var(--superficie-alta)" stroke="var(--borda)" stroke-width="1"/>
+      <text x="${px.toFixed(1)}" y="${(ty + 3.5).toFixed(1)}" text-anchor="middle"
+            font-size="10" font-weight="600" fill="var(--texto)">${m.n}</text>`;
+  }).join('');
+
+  const primeiro = historico[0], ultimo = historico[historico.length - 1];
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" role="img"
+         aria-label="Trajetória do score de ${primeiro.score} a ${ultimo.score} em ${historico.length} dias">
+      <defs>
+        <linearGradient id="sob" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3B6ACC" stop-opacity="0.14"/>
+          <stop offset="100%" stop-color="#3B6ACC" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${limites}
+      <path d="${area}" fill="url(#sob)"/>
+      <path id="linhaScore" d="${linha}" fill="none" stroke="var(--marca)" stroke-width="2"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(historico.length - 1).toFixed(1)}" cy="${y(ultimo.score).toFixed(1)}" r="4.5" fill="var(--marca)"/>
+      ${anotacoes}
+      <text x="${L}" y="${H - 10}" font-size="10.5" fill="var(--texto-fraco)">${dataFmt(primeiro.data)}</text>
+      <text x="${W - R}" y="${H - 10}" font-size="10.5" fill="var(--texto-fraco)" text-anchor="end">${dataFmt(ultimo.data)}</text>
+    </svg>
+    <p class="legenda-grafico">
+      ${primeiro.score} → ${ultimo.score} em ${historico.length} dias.
+      Números no gráfico correspondem aos sinais listados abaixo.
+      ${ultimo.ajustado ? 'Série ancorada no score calculado pelo motor.' : ''}
+    </p>`;
+}
+
+// ---------- sinais ----------
+function blocoSinais(sinais, marcasOrdenadas) {
+  if (!sinais?.length) {
+    return '<p class="bloco-nota">Nenhum sinal de risco detectado nas fontes consultadas. Ausência de registro não é prova de inexistência.</p>';
+  }
+  const ordem = new Map(marcasOrdenadas.map((s, i) => [s, i + 1]));
+  return sinais.map((s) => {
+    const n = ordem.get(s);
+    return `
+    <div class="sinal">
+      <div class="sinal-topo">
+        <div class="sinal-desc">
+          ${n ? `<span class="cliente-meta num">${n}. </span>` : ''}${esc(s.descricao || s.tipo)}
+        </div>
+        <div class="sinal-peso num ${s.neutralizado ? 'zerado' : ''}">
+          ${s.neutralizado ? '0' : '−' + s.peso} pts
+        </div>
+      </div>
+      <div class="sinal-rodape">
+        <span>${dataFmt(s.data)}</span>
+        <span class="camada ${s.deterministico ? 'det' : ''}">
+          ${s.deterministico ? 'regra determinística' : 'índice de tendência'}
+        </span>
+        <span class="selo ${s.aoVivo ? 'ao_vivo' : 'simulado'}">${esc(s.fonte || '—')} ·</span>
+      </div>
+      ${s.neutralizado ? `<div class="neutralizado">
+        Neutralizado: ${esc(s.motivoNeutralizacao)}. Risco climático e macro nunca pontuam sozinhos —
+        sem sinal jurídico, fiscal ou comportamental ancorando, uma seca regional rebaixaria a carteira inteira de uma vez.
+      </div>` : ''}
+      ${s.evidencia ? `<div class="evidencia">
+        <strong>Trecho na fonte${s.url ? ` · <a href="${esc(s.url)}" target="_blank" rel="noopener">abrir documento</a>` : ''}</strong>
+        ${esc(String(s.evidencia).slice(0, 700))}
+      </div>
+      ${String(s.evidencia).length > 220 ? '<button type="button" class="evidencia-toggle">mostrar mais</button>' : ''}` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ---------- ações recomendadas ----------
+// Diferencial do documento de solução: cruza qual sinal domina o score com
+// um catálogo de instrumentos de mitigação. Cálculo local (motor.js), não é
+// fonte nova nem chamada de API — por isso não tem selo de status aqui.
+function blocoAcoes(acoes) {
+  if (!acoes?.length) return '';
+  return `
+    <div class="acoes-recomendadas">
+      <h2 class="bloco">Ações recomendadas</h2>
+      <p class="bloco-nota">
+        Cruza o sinal que mais pesou no score com o catálogo de instrumentos de mitigação.
+        Cálculo local sobre os sinais já coletados — não é fonte nova.
+      </p>
+      ${acoes.map((x, i) => `
+        <div class="acao-item">
+          <div class="acao-num num">${i + 1}</div>
+          <div>
+            <div class="acao-texto">${esc(x.acao)}</div>
+            <div class="acao-motivo">${esc(x.motivo)}</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ---------- PD estimada (não calibrada) ----------
+function blocoPd(pd) {
+  if (!pd) return '';
+  return `
+    <div class="pd-caixa">
+      <h2 class="bloco">PD estimada<span class="selo estimado"></span></h2>
+      <p class="bloco-nota">${esc(pd.metodologia)}</p>
+      <div class="pd-grid">
+        <div class="pd-item"><div class="pd-valor num">${pd.pd6m}%</div><div class="pd-horizonte">6 meses</div></div>
+        <div class="pd-item"><div class="pd-valor num">${pd.pd12m}%</div><div class="pd-horizonte">12 meses</div></div>
+        <div class="pd-item"><div class="pd-valor num">${pd.pd24m}%</div><div class="pd-horizonte">24 meses</div></div>
+      </div>
+    </div>`;
+}
+
+// ---------- fontes ----------
+function blocoFontes(fontes, foraEscopo) {
+  const itens = (fontes || []).map((f) => `
+    <div class="fonte-item">
+      <div class="fonte-linha">
+        <div class="fonte-nome">${esc(f.fonte)}</div>
+        <span class="selo ${esc(f.status)}"></span>
+      </div>
+      <div class="fonte-meta">
+        ${f.status === 'indisponivel'
+          ? esc(f.nota || 'Consulta falhou.')
+          : `${f.sinais?.length || 0} sinal(is) · defasagem de ${f.defasagemDias ?? 0} dia(s)`}
+      </div>
+      ${f.status !== 'indisponivel' && f.nota ? `<div class="fonte-meta">${esc(f.nota)}</div>` : ''}
+    </div>`).join('');
+
+  const fora = (foraEscopo || []).map((f) => `
+    <div class="item">
+      ${esc(f.fonte)}
+      <div class="motivo">${esc(f.motivo)}</div>
+    </div>`).join('');
+
+  return `${itens}
+    <div class="fora-escopo">
+      <h2 class="bloco">Fora de alcance programático</h2>
+      <p class="bloco-nota">Fontes que o sistema não consulta, e por quê. Declarar é mais defensável que omitir.</p>
+      ${fora}
+    </div>`;
+}
+
+// ---------- dossiê ----------
+async function abrirDossie({ id, cnpj }) {
+  $('#simulador').classList.remove('aberto');
+  $('#filaWrap').classList.add('oculto');
+  $('#dossie').classList.add('aberto');
+  $('#dossieCorpo').innerHTML = '<div class="carregando">Orquestrando fontes: Receita Federal, IBGE, diários oficiais, DataJud, clima e macro…</div>';
+  window.scrollTo(0, 0);
+
+  let d;
+  try {
+    const q = id ? `id=${encodeURIComponent(id)}` : `cnpj=${encodeURIComponent(cnpj)}`;
+    const r = await fetch(`/api/dossie?${q}`);
+    d = await r.json();
+  } catch (e) {
+    $('#dossieCorpo').innerHTML = `<div class="erro">
+      <strong>O dossiê não carregou.</strong>
+      Chamada a /api/dossie falhou. Volte para a fila e tente de novo, ou reinicie o servidor.
+    </div>`;
+    return;
+  }
+
+  const a = d.avaliacao;
+  $('#modoRodape').textContent = d.modo === 'offline' ? 'modo offline — fallback cacheado' : '';
+
+  // ordem das anotações do gráfico, para casar numeração com a lista
+  const marcas = (a.sinais || [])
+    .filter((s) => s.data && String(s.data).slice(0, 10) >= d.historico[0]?.data)
+    .sort((x, y) => new Date(x.data) - new Date(y.data));
+
+  $('#dossieCorpo').innerHTML = `
+    <div class="relatorio-cabecalho">
+      <div class="marca-relatorio">Krill Radar — Relatório de Risco de Crédito</div>
+      <div class="meta-relatorio">
+        Gerado em ${new Date().toLocaleString('pt-BR')} · ${esc(d.cliente.nome)} · ${cnpjFmt(d.cliente.cnpj)}
+        ${d.modo === 'offline' ? ' · modo offline (fallback cacheado)' : ''}
+      </div>
+    </div>
+
+    <div class="cabeca-dossie">
+      <div>
+        <h1>${esc(d.cliente.nome)}</h1>
+        <div class="ident num">${cnpjFmt(d.cliente.cnpj)}${d.cliente.cultura ? ` · ${esc(d.cliente.cultura)}` : ''}${d.cliente.municipio ? ` · ${esc(d.cliente.municipio)}/${esc(d.cliente.uf)}` : ''}</div>
+      </div>
+      <div class="score-grande">
+        <div class="valor num" id="scoreValor" data-final="${a.score}">0</div>
+        <div class="faixa">
+          <span class="rating r-${a.rating}">${a.rating}</span>
+          ${esc(a.rotulo)} · confiança ${rot[a.confianca.nivel]} ·
+          <span class="num">${deltaTxt(a.tendencia)}</span> em 30 dias
+        </div>
+      </div>
+    </div>
+
+    <div class="grafico-caixa">${grafico(d.historico, marcas)}</div>
+
+    <div class="colunas">
+      <div>
+        <div class="decisao r-${a.rating}">
+          <h3>Recomendação operacional</h3>
+          <p>${esc(a.decisao)}</p>
+        </div>
+
+        ${blocoAcoes(a.acoesRecomendadas)}
+
+        <div class="explicacao" id="caixaExplicacao">
+          <p class="carregando" style="padding:0">Gerando leitura do analista…</p>
+        </div>
+
+        <h2 class="bloco">Sinais detectados</h2>
+        <p class="bloco-nota">
+          Nenhum número aparece sozinho: cada ponto retirado do score tem fonte, data e camada.
+          Regra determinística é fato objetivo com peso fixo e auditável; índice de tendência mede a velocidade da piora.
+        </p>
+        ${blocoSinais(a.sinais, marcas)}
+      </div>
+
+      <div>
+        ${blocoPd(a.pd)}
+
+        <h2 class="bloco">Fontes consultadas</h2>
+        <p class="bloco-nota">
+          Confiança ${rot[a.confianca.nivel]}: ${esc(a.confianca.justificativa)}
+        </p>
+        ${blocoFontes(d.fontes, d.indisponiveisPorDesign)}
+      </div>
+    </div>
+
+    <div class="relatorio-rodape">
+      Revisão humana obrigatória — este relatório recomenda, não decide. A PD estimada não é uma
+      probabilidade calibrada estatisticamente (ver metodologia acima). Protótipo Krill Radar —
+      Hackathon PMI-DF 2026, case Krill Tech.
+    </div>`;
+
+  // Momento único de entrada: o score conta até o valor final e a linha do
+  // gráfico se desenha — o resto da tela fica parado. "Gaste a ousadia no
+  // gráfico do dossiê", não em transições espalhadas por toda parte.
+  requestAnimationFrame(() => {
+    animarScore();
+    animarGrafico();
+  });
+
+  // Explicação do agente sintetizador, com fallback cacheado no servidor.
+  try {
+    const r = await fetch('/api/explicar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clienteId: d.cliente.id,
+        cliente: d.cliente,
+        score: a.score, rating: a.rating, rotulo: a.rotulo,
+        tendencia: a.tendencia, confianca: a.confianca, decisao: a.decisao,
+        sinais: (a.sinais || []).map((s) => ({
+          tipo: s.tipo, descricao: s.descricao, peso: s.neutralizado ? 0 : s.peso,
+          data: s.data, fonte: s.fonte, deterministico: s.deterministico,
+          simulado: !s.aoVivo, neutralizado: Boolean(s.neutralizado),
+        })),
+      }),
+    });
+    const e = await r.json();
+    $('#caixaExplicacao').innerHTML = `
+      <p>${esc(e.texto)}</p>
+      <div class="origem">
+        ${e.origem === 'llm' ? 'Gerado pelo agente sintetizador a partir dos sinais estruturados.'
+                             : 'Explicação pré-gerada (modo de contingência).'}
+        ${e.nota ? ` ${esc(e.nota)}` : ''}
+      </div>`;
+  } catch {
+    $('#caixaExplicacao').innerHTML =
+      '<p class="bloco-nota" style="margin:0">A leitura em linguagem natural não carregou. Os sinais abaixo seguem válidos.</p>';
+  }
+}
+
+// ---------- navegação e busca ----------
+$('#voltarBtn').addEventListener('click', () => {
+  $('#dossie').classList.remove('aberto');
+  $('#filaWrap').classList.remove('oculto');
+  $('#modoRodape').textContent = '';
+  window.scrollTo(0, 0);
+});
+
+// Geração de relatório: sem biblioteca nova, sem servidor gerando PDF — o
+// CSS de @media print formata o mesmo dossiê já carregado como documento, e
+// o diálogo nativo do navegador ("Salvar como PDF") faz a exportação. Real
+// e funcional, sem quebrar a regra do projeto de não instalar dependência.
+$('#relatorioBtn').addEventListener('click', () => window.print());
+
+$('#cnpjBtn').addEventListener('click', consultarCnpj);
+$('#cnpjInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') consultarCnpj(); });
+
+async function consultarCnpj() {
+  const bruto = $('#cnpjInput').value.replace(/\D/g, '');
+  const alvo = $('#buscaErro');
+  if (bruto.length !== 14) {
+    alvo.innerHTML = `<div class="erro"><strong>CNPJ incompleto.</strong>
+      São 14 dígitos. Pontuação é opcional.</div>`;
+    return;
+  }
+  alvo.innerHTML = '';
+  $('#cnpjBtn').disabled = true;
+  try {
+    await abrirDossie({ cnpj: bruto });
+  } finally {
+    $('#cnpjBtn').disabled = false;
+  }
+}
+
+// ---------- simulador de estresse ----------
+function formatoBRL(v) {
+  return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+}
+
+function abrirSimulador() {
+  $('#dossie').classList.remove('aberto');
+  $('#filaWrap').classList.add('oculto');
+  $('#simulador').classList.add('aberto');
+  window.scrollTo(0, 0);
+}
+
+$('#simuladorBtn').addEventListener('click', abrirSimulador);
+
+$('#voltarSimuladorBtn').addEventListener('click', () => {
+  $('#simulador').classList.remove('aberto');
+  $('#filaWrap').classList.remove('oculto');
+  window.scrollTo(0, 0);
+});
+
+$('#simTipo').addEventListener('change', () => {
+  $('#simUfWrap').style.display = $('#simTipo').value === 'clima' ? '' : 'none';
+});
+
+$('#simIntensidade').addEventListener('input', () => {
+  $('#simIntensidadeValor').textContent = $('#simIntensidade').value + '%';
+});
+
+$('#simRodarBtn').addEventListener('click', rodarSimulacao);
+
+async function rodarSimulacao() {
+  const tipo = $('#simTipo').value;
+  const intensidadePct = Number($('#simIntensidade').value);
+  const uf = $('#simUf').value.trim().toUpperCase() || null;
+
+  $('#simResultado').innerHTML = '<div class="carregando">Rodando simulação…</div>';
+  try {
+    const r = await fetch('/api/simular', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo, intensidadePct, uf }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.erro || 'falha na simulação');
+    renderSimulacao(d);
+  } catch (e) {
+    $('#simResultado').innerHTML = `<div class="erro">
+      <strong>A simulação não rodou.</strong> ${esc(e.message)}
+    </div>`;
+  }
+}
+
+function renderSimulacao(d) {
+  const linhas = [...d.linhas].sort(
+    (a, b) => Number(b.migrou) - Number(a.migrou) || b.penalidade - a.penalidade
+  );
+
+  $('#simResultado').innerHTML = `
+    <div class="sim-resumo">
+      <div class="sim-card">
+        <div class="sim-valor num">${d.clientesAfetados}</div>
+        <div class="sim-rotulo">clientes atingidos pelo choque</div>
+      </div>
+      <div class="sim-card">
+        <div class="sim-valor num">${d.clientesQueMigraram}</div>
+        <div class="sim-rotulo">migraram de rating</div>
+      </div>
+      <div class="sim-card">
+        <div class="sim-valor num">${formatoBRL(d.exposicaoAdicionalEmRisco)}</div>
+        <div class="sim-rotulo">exposição adicional em rating C/D</div>
+      </div>
+    </div>
+    <p class="bloco-nota">${esc(d.nota)}</p>
+    <table class="fila sim-tabela">
+      <thead>
+        <tr>
+          <th>Cliente</th><th>Cultura</th><th>UF</th>
+          <th class="n">Score</th><th>Rating</th><th class="n">Limite de crédito</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${linhas.map((l) => `
+          <tr class="${l.migrou ? 'sim-migrou' : ''}">
+            <td class="cliente-nome">${esc(l.nome)}</td>
+            <td class="cliente-meta">${esc(l.cultura)}</td>
+            <td class="cliente-meta">${esc(l.uf)}</td>
+            <td class="n num">${l.scoreAntes}${l.atingido ? `<span class="sim-seta">→</span>${l.scoreChoque}` : ''}</td>
+            <td>
+              <span class="rating r-${l.ratingAntes}">${l.ratingAntes}</span>
+              ${l.atingido ? `<span class="sim-seta">→</span><span class="rating r-${l.ratingChoque}">${l.ratingChoque}</span>` : ''}
+            </td>
+            <td class="n num">${formatoBRL(l.limiteCredito)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+carregarFila();
+</script>
+</body>
+</html>
